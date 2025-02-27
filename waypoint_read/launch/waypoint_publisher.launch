@@ -1,0 +1,7 @@
+<launch>
+    <arg name="waypoints_file" default="/home/chenyang/catkin_ws/src/marsim_ws/src/MARSIM/data/path.txt"/>
+
+    <node pkg="waypoint_read" type="waypoint_publisher_node" name="waypoint_publisher" output="screen">
+        <param name="waypoints_file" value="/home/chenyang/catkin_ws/src/marsim_ws/src/MARSIM/data/path.txt"/>
+    </node>
+</launch>
