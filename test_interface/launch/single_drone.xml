@@ -60,6 +60,7 @@
         <param name="damping_ratio" value="1.0"/>
     </node>
 
+
     <node pkg="odom_visualization" name="quad$(arg drone_id)_odom_visualization" type="odom_visualization"
           output="screen">
         <remap from="~odom" to="/quad_$(arg drone_id)/$(arg odom_topic)"/>
@@ -79,9 +80,6 @@
         <param name="mesh_resource" value="file:///home/chenyang/catkin_ws/src/marsim_ws/src/MARSIM/Utils/odom_visualization/meshes/yunque.dae"/>
     </node>
 
-    <include file="$(find waypoint_read)/launch/waypoint_publisher.launch">
-        <arg name="waypoints_file" value="/home/chenyang/catkin_ws/src/marsim_ws/src/MARSIM/data/path.txt"/>
-    </include>
 
     <group if="$(arg use_gpu)">
 

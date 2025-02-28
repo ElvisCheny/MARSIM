@@ -5,7 +5,7 @@
 #include <sstream>
 #include <vector>
 #include <cstddef>
-#include <stddef.h>
+#include <tf/tf.h>
 
 std::vector<geometry_msgs::PoseStamped> loadWaypointsFromFile(const std::string& filename) {
     std::vector<geometry_msgs::PoseStamped> waypoints;
@@ -39,19 +39,35 @@ std::vector<geometry_msgs::PoseStamped> loadWaypointsFromFile(const std::string&
 
 int main(int argc, char** argv) {
     ros::init(argc, argv, "waypoint_publisher");
-    ros::NodeHandle nh;
+    ros::NodeHandle nh("~");
 
     std::string filename;
-    nh.param("waypoints_file", filename, std::string("waypoints.txt"));
+    nh.param<std::string>("waypoints_file", filename, std::string("default"));
 
     std::vector<geometry_msgs::PoseStamped> waypoints = loadWaypointsFromFile(filename);
 
-    ros::Publisher goal_pub = nh.advertise<geometry_msgs::PoseStamped>("/path_goal", 10);
+    ros::Publisher goal_pub = nh.advertise<geometry_msgs::PoseStamped>("/goal", 10);
 
-    ros::Rate rate(1); // 发布频率为 1 Hz
+    ros::Rate rate(0.5); // 发布频率为 1 Hz
     size_t index = 0;
     while (ros::ok()) {
         if (index < waypoints.size()) {
+            const auto& waypoint = waypoints[index];
+            double roll, pitch, yaw;
+            tf::Quaternion q(
+                waypoint.pose.orientation.x,
+                waypoint.pose.orientation.y,
+                waypoint.pose.orientation.z,
+                waypoint.pose.orientation.w
+            );
+            tf::Matrix3x3(q).getRPY(roll, pitch, yaw);
+
+            ROS_INFO("Setting goal: Frame:%s, Position(%.3f, %.3f, %.3f), Orientation(%.3f, %.3f, %.3f, %.3f) = Angle: %.3f",
+                     waypoint.header.frame_id.c_str(),
+                     waypoint.pose.position.x, waypoint.pose.position.y, waypoint.pose.position.z,
+                     waypoint.pose.orientation.x, waypoint.pose.orientation.y, waypoint.pose.orientation.z, waypoint.pose.orientation.w,
+                     yaw);
+
             goal_pub.publish(waypoints[index]);
             index++;
         } else {
