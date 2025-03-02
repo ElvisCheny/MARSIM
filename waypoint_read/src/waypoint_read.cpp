@@ -1,3 +1,6 @@
+// ChenYang
+// 2025/02/27
+// Read waypoints from a file and publish them as goals
 #include <ros/ros.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <ros/console.h>

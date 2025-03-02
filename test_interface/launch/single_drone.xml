@@ -43,7 +43,7 @@
         <param name="init_state_z" value="$(arg init_z_)"/>
     </node>
 
-    <node pkg="cascadepid" name="quad$(arg drone_id)_cascadePID_node" type="cascadePID_node" >
+    <node pkg="cascadePID" name="quad$(arg drone_id)_cascadePID_node" type="cascadePID_node" >
         <param name="drone_id" value="$(arg drone_id)"/>
         <remap from="~odom" to="/quad_$(arg drone_id)/$(arg odom_topic)"/>
         <remap from="~cmd_RPM" to="/quad_$(arg drone_id)/cmdRPM"/>
