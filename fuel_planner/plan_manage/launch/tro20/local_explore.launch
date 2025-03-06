@@ -8,7 +8,7 @@
   <arg name="odom_topic" value="/state_ukf/odom" />
 
   <!-- main algorithm params -->
-  <include file="$(find plan_manage)/launch/tro/local_explore_alg.xml">
+  <include file="$(find plan_manage)/launch/tro20/local_explore_alg.xml">
 
     <arg name="map_size_x_" value="$(arg map_size_x)"/>
     <arg name="map_size_y_" value="$(arg map_size_y)"/>

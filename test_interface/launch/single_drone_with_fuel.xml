@@ -80,6 +80,9 @@
 
     <group if="$(arg use_gpu)">
 
+
+
+  
         <group if="$(eval lidar_type == 'avia')">
             <node pkg="local_sensing_node" type="opengl_render_node" name="quad$(arg drone_id)_pcl_render_node" output="screen" 
                 args="$(arg map_name_)">
