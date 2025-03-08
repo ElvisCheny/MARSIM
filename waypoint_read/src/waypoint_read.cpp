@@ -51,7 +51,7 @@ int main(int argc, char** argv) {
 
     ros::Publisher goal_pub = nh.advertise<geometry_msgs::PoseStamped>("/goal", 10);
 
-    ros::Rate rate(0.5); // 发布频率为 1 Hz
+    ros::Rate rate(0.2); // 发布频率为 1 Hz
     size_t index = 0;
     while (ros::ok()) {
         if (index < waypoints.size()) {

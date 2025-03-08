@@ -56,7 +56,8 @@
         <param name="drone_id" value="$(arg drone_id)"/>
         <remap from="~odom" to="/quad_$(arg drone_id)/$(arg odom_topic)"/>
         <remap from="~cmd_RPM" to="/quad_$(arg drone_id)/cmdRPM"/>
-        <!-- <remap from="~cmd_pose" to="/goal"/> -->
+        <!-- cmd_pose不注释的话/goal会直接传入给动力系统，无人机会按照未规划的路径直线前进 -->
+        <!-- <remap from="~cmd_pose" to="/goal"/> --> 
         <!--/quad_$(arg drone_id)/pos_cmd  -->
         <!-- <remap from="~position_cmd" to="/quad_$(arg drone_id)/planning/pos_cmd"/> -->
         <!-- <remap from="~position_cmd" to="/traj_server/planning/pos_cmd"/> -->
