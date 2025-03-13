@@ -5,9 +5,11 @@
 #include <std_msgs/Float32MultiArray.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <quadrotor_msgs/PositionCommand.h>
+#include "ros/console.h"
 
 using namespace std;
 using namespace Eigen;
+
 
 ros::Publisher control_RPM_pub;
 
