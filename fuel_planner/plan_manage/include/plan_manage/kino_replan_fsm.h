@@ -18,6 +18,7 @@
 #include <bspline/Bspline.h>
 #include <plan_manage/planner_manager.h>
 #include <traj_utils/planning_visualization.h>
+#include <waypoint_msgs/WaypointWithVelocity.h>
 
 using std::vector;
 
@@ -75,6 +76,10 @@ private:
   ros::Timer exec_timer_, safety_timer_, vis_timer_, test_something_timer_;
   ros::Subscriber waypoint_sub_, odom_sub_;
   ros::Publisher replan_pub_, new_pub_, bspline_pub_;
+  // 添加速度相关成员
+  ros::Subscriber waypoint_vel_sub_; // 订阅带速度信息的航点
+  std::vector<Eigen::Vector3d> waypoint_velocities_; // 存储航点的速度
+  bool use_waypoint_velocity_; // 是否使用航点速度
 
   /* helper functions */
   bool callKinodynamicReplan();        // front-end and back-end method
@@ -88,6 +93,9 @@ private:
   void checkCollisionCallback(const ros::TimerEvent& e);
   void waypointCallback(const nav_msgs::PathConstPtr& msg);
   void odometryCallback(const nav_msgs::OdometryConstPtr& msg);
+
+  // 添加航点速度回调函数
+  void waypointVelocityCallback(const waypoint_msgs::WaypointWithVelocityConstPtr& msg);
 
 public:
   KinoReplanFSM(/* args */) {

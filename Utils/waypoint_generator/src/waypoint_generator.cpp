@@ -11,6 +11,7 @@
 #include <deque>
 #include <boost/format.hpp>
 #include <eigen3/Eigen/Dense>
+#include <waypoint_msgs/WaypointWithVelocity.h>
 
 using namespace std;
 using bfmt = boost::format;
@@ -26,6 +27,14 @@ nav_msgs::Path waypoints;
 // series waypoint needed
 std::deque<nav_msgs::Path> waypointSegments;
 ros::Time trigged_time;
+
+// 添加速度相关的数据结构和发布器
+struct WaypointWithVel {
+  geometry_msgs::Pose pose;
+  geometry_msgs::Vector3 velocity;
+};
+std::vector<WaypointWithVel> waypoints_with_vel;
+ros::Publisher pub_waypoints_vel; // 用于发布带速度信息的路径点
 
 void load_seg(ros::NodeHandle& nh, int segid, const ros::Time& time_base) {
   std::string seg_str = boost::str(bfmt("seg%d/") % segid);
@@ -81,6 +90,31 @@ void load_waypoints(ros::NodeHandle& nh, const ros::Time& time_base) {
     }
   }
   ROS_INFO("Overall load %zu segments", waypointSegments.size());
+}
+
+
+void publish_waypoints_with_velocity() {
+  if (waypoints_with_vel.empty()) {
+      return;
+  }
+  ROS_INFO("[waypoint_generator] Publishing %zu waypoints with velocity", waypoints_with_vel.size());
+  
+  for (const auto& wp : waypoints_with_vel) {
+    // 创建一个带速度的航点消息
+    waypoint_msgs::WaypointWithVelocity wp_msg;
+    wp_msg.header.frame_id = "world";
+    wp_msg.header.stamp = ros::Time::now();
+    
+    wp_msg.pose = wp.pose;
+    wp_msg.velocity = wp.velocity;
+    
+    // 发布消息
+    pub_waypoints_vel.publish(wp_msg);
+    
+    ROS_INFO("[waypoint_generator] Published waypoint at [%.2f, %.2f, %.2f] with velocity [%.2f, %.2f, %.2f] m/s",
+      wp.pose.position.x, wp.pose.position.y, wp.pose.position.z,
+      wp.velocity.x, wp.velocity.y, wp.velocity.z);
+  }
 }
 
 void publish_waypoints() {
@@ -175,8 +209,23 @@ void goal_callback(const geometry_msgs::PoseStamped::ConstPtr& msg) {
       geometry_msgs::PoseStamped pt = *msg;
       waypoints.poses.clear();
       waypoints.poses.push_back(pt);
+
+      // 新增：为普通航点创建一个默认速度为0的速度信息
+      // 注意：这里不是自己指定速度，而是为普通航点添加默认速度
+      // 实际的速度应该从 /waypoint_with_velocity 话题获取
+      WaypointWithVel wp;
+      wp.pose = pt.pose;
+      wp.velocity.x = 0.0; // 默认速度为0，等待外部通过 /waypoint_with_velocity 更新
+      wp.velocity.y = 0.0;
+      wp.velocity.z = 0.0;
+      
+      waypoints_with_vel.clear();
+      waypoints_with_vel.push_back(wp);
+
       publish_waypoints_vis();
       publish_waypoints();
+      // 发布航点的速度信息
+      publish_waypoints_with_velocity();
     } else {
       ROS_WARN("[waypoint_generator] invalid goal in manual-lonely-waypoint mode.");
     }
@@ -241,6 +290,43 @@ void traj_start_trigger_callback(const geometry_msgs::PoseStamped& msg) {
   }
 }
 
+void waypoint_with_velocity_callback(const waypoint_msgs::WaypointWithVelocity::ConstPtr& msg) {
+  if (!is_odom_ready) {
+      ROS_ERROR("[waypoint_generator] No odom!");
+      return;
+  }
+
+  trigged_time = ros::Time::now();
+  
+  ROS_INFO("[waypoint_generator] Received waypoint with velocity: [%.2f, %.2f, %.2f] m/s", 
+          msg->velocity.x, msg->velocity.y, msg->velocity.z);
+          
+  // 将当前航点添加到带速度的路径点序列中
+  WaypointWithVel wp;
+  wp.pose = msg->pose;
+  wp.velocity = msg->velocity;
+  
+  // 清空之前的航点并添加新航点
+  waypoints_with_vel.clear();
+  waypoints_with_vel.push_back(wp);
+  
+  // 同时更新原始的路径点（用于可视化和兼容性）
+  geometry_msgs::PoseStamped pt;
+  pt.header = msg->header;
+  pt.pose = msg->pose;
+  
+  waypoints.poses.clear();
+  waypoints.poses.push_back(pt);
+  
+  // 发布可视化消息和兼容的路径点
+  publish_waypoints_vis();
+  publish_waypoints();
+  
+  // 发布带速度信息的路径点
+  publish_waypoints_with_velocity();
+}
+
+
 int main(int argc, char** argv) {
   ros::init(argc, argv, "waypoint_generator");
   ros::NodeHandle n("~");
@@ -248,8 +334,15 @@ int main(int argc, char** argv) {
   ros::Subscriber sub1 = n.subscribe("odom", 10, odom_callback);
   ros::Subscriber sub2 = n.subscribe("goal", 10, goal_callback);
   ros::Subscriber sub3 = n.subscribe("traj_start_trigger", 10, traj_start_trigger_callback);
+
+   // 添加订阅 waypoint_with_velocity 话题
+   ros::Subscriber sub4 = n.subscribe("/waypoint_with_velocity", 10, waypoint_with_velocity_callback);
+
   pub1 = n.advertise<nav_msgs::Path>("waypoints", 50);
   pub2 = n.advertise<geometry_msgs::PoseArray>("waypoints_vis", 10);
+
+  // 添加发布带速度信息的路径点
+  pub_waypoints_vel = n.advertise<waypoint_msgs::WaypointWithVelocity>("waypoints_with_vel", 10);
 
   trigged_time = ros::Time(0);
 

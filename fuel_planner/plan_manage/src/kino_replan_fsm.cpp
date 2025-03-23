@@ -36,6 +36,16 @@ void KinoReplanFSM::init(ros::NodeHandle& nh) {
   replan_pub_ = nh.advertise<std_msgs::Empty>("/planning/replan", 10);
   new_pub_ = nh.advertise<std_msgs::Empty>("/planning/new", 10);
   bspline_pub_ = nh.advertise<bspline::Bspline>("/planning/bspline", 10);
+
+  /* 添加或修改订阅 */
+  waypoint_sub_ = node_.subscribe("/waypoints", 1, &KinoReplanFSM::waypointCallback, this);
+  // 添加对带速度航点的订阅
+  node_.param("fsm/use_waypoint_velocity", use_waypoint_velocity_, true);
+  if (use_waypoint_velocity_) {
+    waypoint_vel_sub_ = node_.subscribe("/waypoint_generator/waypoints_with_vel", 1, 
+                                        &KinoReplanFSM::waypointVelocityCallback, this);
+    ROS_INFO("Using waypoint velocity information for planning");
+  }
 }
 
 void KinoReplanFSM::waypointCallback(const nav_msgs::PathConstPtr& msg) {
@@ -78,6 +88,34 @@ void KinoReplanFSM::odometryCallback(const nav_msgs::OdometryConstPtr& msg) {
   odom_orient_.z() = msg->pose.pose.orientation.z;
 
   have_odom_ = true;
+}
+
+void KinoReplanFSM::waypointVelocityCallback(const waypoint_msgs::WaypointWithVelocityConstPtr& msg) {
+  if (msg->header.frame_id != "world") {
+    ROS_ERROR("frame id %s is not supported!", msg->header.frame_id.c_str());
+    return;
+  }
+
+  if (exec_state_ == WAIT_TARGET)
+    end_vel_ << msg->velocity.x, msg->velocity.y, msg->velocity.z;
+  
+  // 设置目标点和目标速度
+  end_pt_ << msg->pose.position.x, msg->pose.position.y, msg->pose.position.z;
+  end_vel_ << msg->velocity.x, msg->velocity.y, msg->velocity.z;
+  
+  ROS_INFO("Received waypoint with velocity: target pos=[%f, %f, %f], vel=[%f, %f, %f]!", 
+            end_pt_(0), end_pt_(1), end_pt_(2),
+            end_vel_(0), end_vel_(1), end_vel_(2));
+            
+  // 更新状态
+  current_wp_ = 0;
+  have_target_ = true;
+  
+  if (exec_state_ == WAIT_TARGET) {
+    changeFSMExecState(GEN_NEW_TRAJ, "WAYPOINTVELOCITY");
+  } else if (exec_state_ == EXEC_TRAJ) {
+    changeFSMExecState(REPLAN_TRAJ, "WAYPOINTVELOCITY");
+  }
 }
 
 void KinoReplanFSM::changeFSMExecState(FSM_EXEC_STATE new_state, string pos_call) {
@@ -277,14 +315,96 @@ void KinoReplanFSM::checkCollisionCallback(const ros::TimerEvent& e) {
   }
 }
 
+// bool KinoReplanFSM::callKinodynamicReplan() {
+//   auto t1 = ros::Time::now();
+//   ros::Time time_r = ros::Time::now();
+//   bool success =
+//       planner_manager_->kinodynamicReplan(start_pt_, start_vel_, start_acc_, end_pt_, end_vel_);
+
+//   auto t2 = ros::Time::now();
+//   if (success) {
+//     replan_time_.push_back((t2 - t1).toSec());
+//     double mean1 = 0.0;
+//     for (auto t : replan_time_)
+//       mean1 += t;
+//     mean1 /= replan_time_.size();
+//     ROS_WARN("Replan number: %d, mean traj: %lf", replan_time_.size(), mean1);
+//   }
+
+//   if (success) {
+//     planner_manager_->planYaw(start_yaw_);
+
+//     auto info = &planner_manager_->local_data_;
+//     info->start_time_ = time_r;
+
+//     /* publish traj */
+//     bspline::Bspline bspline;
+//     bspline.order = planner_manager_->pp_.bspline_degree_;
+//     bspline.start_time = info->start_time_;
+//     bspline.traj_id = info->traj_id_;
+
+//     Eigen::MatrixXd pos_pts = info->position_traj_.getControlPoint();
+
+//     for (int i = 0; i < pos_pts.rows(); ++i) {
+//       geometry_msgs::Point pt;
+//       pt.x = pos_pts(i, 0);
+//       pt.y = pos_pts(i, 1);
+//       pt.z = pos_pts(i, 2);
+//       bspline.pos_pts.push_back(pt);
+//     }
+
+//     Eigen::VectorXd knots = info->position_traj_.getKnot();
+//     for (int i = 0; i < knots.rows(); ++i) {
+//       bspline.knots.push_back(knots(i));
+//     }
+
+//     Eigen::MatrixXd yaw_pts = info->yaw_traj_.getControlPoint();
+//     for (int i = 0; i < yaw_pts.rows(); ++i) {
+//       double yaw = yaw_pts(i, 0);
+//       bspline.yaw_pts.push_back(yaw);
+//     }
+//     bspline.yaw_dt = info->yaw_traj_.getKnotSpan();
+
+//     bspline_pub_.publish(bspline);
+
+//     /* visulization */
+//     auto plan_data = &planner_manager_->plan_data_;
+
+//     visualization_->drawGeometricPath(plan_data->kino_path_, 0.05, Eigen::Vector4d(1, 0, 1, 1));
+//     visualization_->drawBspline(info->position_traj_, 0.08, Eigen::Vector4d(1.0, 1.0, 0.0, 1), true,
+//                                 0.15, Eigen::Vector4d(1, 0, 0, 1));
+
+//     return true;
+//   } else {
+//     cout << "generate new traj fail." << endl;
+//     return false;
+//   }
+// }
+
 bool KinoReplanFSM::callKinodynamicReplan() {
+  bool plan_success = false;
+
+  Eigen::Vector3d start_pt, start_vel, start_acc, end_pt, end_vel;
+
+  start_pt = odom_pos_;
+  start_vel = odom_vel_;
+  start_acc << 0, 0, 0;
+  end_pt = end_pt_;
+  
+  // 使用航点提供的速度信息
+  if (use_waypoint_velocity_) {
+    end_vel = end_vel_;
+    ROS_INFO("Using waypoint velocity: [%f, %f, %f]", end_vel(0), end_vel(1), end_vel(2));
+  } else {
+    end_vel << 0, 0, 0;
+  }
   auto t1 = ros::Time::now();
   ros::Time time_r = ros::Time::now();
-  bool plan_success =
+  bool success =
       planner_manager_->kinodynamicReplan(start_pt_, start_vel_, start_acc_, end_pt_, end_vel_);
 
   auto t2 = ros::Time::now();
-  if (plan_success) {
+  if (success) {
     replan_time_.push_back((t2 - t1).toSec());
     double mean1 = 0.0;
     for (auto t : replan_time_)
@@ -293,7 +413,7 @@ bool KinoReplanFSM::callKinodynamicReplan() {
     ROS_WARN("Replan number: %d, mean traj: %lf", replan_time_.size(), mean1);
   }
 
-  if (plan_success) {
+  if (success) {
     planner_manager_->planYaw(start_yaw_);
 
     auto info = &planner_manager_->local_data_;
@@ -336,11 +456,9 @@ bool KinoReplanFSM::callKinodynamicReplan() {
     visualization_->drawBspline(info->position_traj_, 0.08, Eigen::Vector4d(1.0, 1.0, 0.0, 1), true,
                                 0.15, Eigen::Vector4d(1, 0, 0, 1));
 
-    return true;
-  } else {
-    cout << "generate new traj fail." << endl;
-    return false;
-  }
+    plan_success = true;
+  } 
+  return plan_success;
 }
 
 // KinoReplanFSM::
