@@ -40,7 +40,7 @@ void KinoReplanFSM::init(ros::NodeHandle& nh) {
   /* 添加或修改订阅 */
   waypoint_sub_ = node_.subscribe("/waypoints", 1, &KinoReplanFSM::waypointCallback, this);
   // 添加对带速度航点的订阅
-  node_.param("fsm/use_waypoint_velocity", use_waypoint_velocity_, true);
+  node_.param("fsm/use_waypoint_velocity", use_waypoint_velocity_, true);  //是否需要在laucnch中添加这个参数（再议）
   if (use_waypoint_velocity_) {
     waypoint_vel_sub_ = node_.subscribe("/waypoint_generator/waypoints_with_vel", 1, 
                                         &KinoReplanFSM::waypointVelocityCallback, this);

@@ -1,7 +1,10 @@
 <launch>
-    <arg name="waypoints_file" default="/home/chenyang/catkin_ws/src/marsim_ws/src/MARSIM/data/path.txt"/>
+    <arg name="waypoints_file" default="/home/chenyang/catkin_ws/src/marsim_ws/src/MARSIM/data/lateral_waypoints.txt"/>
 
     <node pkg="waypoint_read" type="waypoint_publisher_node" name="waypoint_publisher" output="screen">
-        <param name="waypoints_file" value="/home/chenyang/catkin_ws/src/marsim_ws/src/MARSIM/data/path.txt"/>
+        <param name="waypoints_file" value="/home/chenyang/catkin_ws/src/marsim_ws/src/MARSIM/data/lateral_waypoints.txt"/>
+        <param name="waypoint_reached_threshold" value="2.0"/>
+        <param name="waypoint_timeout" value="15.0"/>
+    <param name="odom_topic" value="/quad_0/lidar_slam/odom"/>
     </node>
 </launch>
